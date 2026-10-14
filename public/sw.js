@@ -132,47 +132,61 @@ self.addEventListener('sync', e => {
 });
 
 // Escuchar PUSH
-self.addEventListener('push', e => {
+// public/sw.js
+self.addEventListener('push', event => {
+  let data = {
+    titulo: 'Notificación por Defecto',
+    cuerpo: 'Mensaje recibido',
+    usuario: 'system'
+  };
 
-    // console.log(e);
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.cuerpo = event.data.text();
+    }
+  }
 
-    const data = JSON.parse( e.data.text() );
+  const title = data.titulo || 'Notificación Push UPTC';
+  const options = {
+    body: data.cuerpo || 'Tiene un nuevo mensaje en el chat.',
+    icon: `img/avatars/${data.usuario || 'spiderman'}.jpg`,
+    badge: 'img/favicon.ico',
+    image: 'https://vignette.wikia.nocookie.net/marvelcinematicuniverse/images/5/5b/Torre_de_los_Avengers.png',
+    vibrate: [200, 100, 200, 100, 400], // Patrón de vibración [pulso, pausa, pulso...]
+    tag: 'chat-group-notification',     // Agrupador de notificaciones
+    renotify: true,                      // Reemplaza y vuelve a alertar si comparte tag
+    requireInteraction: true,           // Persiste hasta interacción del usuario
+    data: {
+      url: '/',
+      fecha: new Date().toISOString(),
+      usuarioId: data.usuario || 'spiderman'
+    },
+    actions: [
+      { action: 'aceptar-action', title: 'Responder', icon: 'img/avatar/thor.jpg' },
+      { action: 'cancelar-action', title: 'Descartar', icon: 'img/avatar/ironman.jpg' }
+    ]
+  };
 
-    // console.log(data);
+  event.waitUntil(self.registration.showNotification(title, options));
+});
 
+// Listener para la interacción con los botones de acción
+self.addEventListener('notificationclick', event => {
+  const notificacion = event.notification;
+  const accion = event.action;
 
-    const title = data.titulo;
-    const options = {
-        body: data.cuerpo,
-        // icon: 'img/icons/icon-72x72.png',
-        icon: `img/avatars/${ data.usuario }.jpg`,
-        badge: 'img/favicon.ico',
-        image: 'https://vignette.wikia.nocookie.net/marvelcinematicuniverse/images/5/5b/Torre_de_los_Avengers.png/revision/latest?cb=20150626220613&path-prefix=es',
-        vibrate: [125,75,125,275,200,275,125,75,125,275,200,600,200,600],
-        openUrl: '/',
-        data: {
-            // url: 'https://google.com',
-            url: '/',
-            id: data.usuario
-        },
-        actions: [
-            {
-                action: 'thor-action',
-                title: 'Thor',
-                icon: 'img/avatar/thor.jpg'
-            },
-            {
-                action: 'ironman-action',
-                title: 'Ironman',
-                icon: 'img/avatar/ironman.jpg'
-            }
-        ]
-    };
+  if (accion === 'aceptar-action') {
+    console.log('El usuario seleccionó: Responder');
+    clients.openWindow(notificacion.data.url);
+  } else if (accion === 'cancelar-action') {
+    console.log('El usuario seleccionó: Descartar');
+  } else {
+    console.log('El usuario hizo clic en el cuerpo de la notificación');
+  }
 
-
-    e.waitUntil( self.registration.showNotification( title, options) );
-
-
+  notificacion.close();
 });
 
 

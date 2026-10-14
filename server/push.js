@@ -8,13 +8,10 @@ const vapid = require('./vapid.json');
 const webpush = require('web-push');
 
 webpush.setVapidDetails(
-    'mailto:carlos.arenas@uptc.edu.co',
+    'mailto:laura.figueredo02@uptc.edu.co',
     vapid.publicKey,
     vapid.privateKey
   );
-
-
-
 
 let suscripciones = require('./subs-db.json');
 

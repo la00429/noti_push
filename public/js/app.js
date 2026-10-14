@@ -2,6 +2,7 @@ var url = window.location.href;
 var swLocation = '/sw.js';
 
 var swReg;
+const indicador = $('#indicador-permiso');
 window.enviarNotificacion = enviarNotificacion;
 
 if ( navigator.serviceWorker ) {
@@ -25,7 +26,26 @@ if ( navigator.serviceWorker ) {
 
 }
 
+function actualizarIndicadorPermiso() {
+  if (!('Notification' in window)) {
+    indicador.text('Permiso: No Soportado').attr('class', 'badge-permiso permiso-denied');
+    return;
+  }
 
+  const estado = Notification.permission;
+  indicador.removeClass('permiso-granted permiso-denied permiso-default');
+
+  if (estado === 'granted') {
+    indicador.text('Permiso: Granted').addClass('permiso-granted');
+  } else if (estado === 'denied') {
+    indicador.text('Permiso: Denied').addClass('permiso-denied');
+  } else {
+    indicador.text('Permiso: Default').addClass('permiso-default');
+  }
+}
+
+// Invocación al cargar la aplicación
+actualizarIndicadorPermiso();
 
 
 
@@ -250,32 +270,31 @@ function verificaSuscripcion( activadas ) {
 
 async function enviarNotificacion() {
 
-    if (!swReg) {
-        console.log('No hay registro de Service Worker');
-        return;
-    }
-     if (!('Notification' in window)) {
-        console.log('Este navegador no soporta notificaciones');
+    if (!swReg || Notification.permission !== 'granted') {
+        console.warn('El Service Worker no está listo o el permiso no ha sido concedido');
         return;
     }
 
-    if (Notification.permission !== 'granted') {
-        console.log('No hay permiso para mostrar notificaciones');
-        return;
-    }
+    const opciones = {
+        body: 'Demostración de propiedades avanzadas en la Web Notification API',
+        icon: 'img/avatars/spiderman.jpg',
+        badge: 'img/favicon.ico',
+        image: 'https://vignette.wikia.nocookie.net/marvelcinematicuniverse/images/5/5b/Torre_de_los_Avengers.png',
+        vibrate: [100, 50, 100, 50, 200],
+        tag: 'prueba-local',
+        renotify: true,
+        requireInteraction: true,
+        data: { url: '/' },
+        actions: [
+            { action: 'aceptar-action', title: 'Ver Detalles' },
+            { action: 'cancelar-action', title: 'Cerrar' }
+        ]
+    };
+
     try {
-        console.log('Mostrando notificación de prueba...');
-        await swReg.showNotification('Notificación de prueba', {
-            body: 'Las notificaciones funcionan correctamente en Chrome',
-            icon: 'img/icons/icon-192x192.png',
-            badge: 'img/favicon.ico',
-            data: {
-                url: '/index.html'
-            },
-            requireInteraction: true
-        });
+        await swReg.showNotification('¡Notificación Personalizada UPTC!', opciones);
     } catch (err) {
-        console.log('Error mostrando notificación de prueba:', err);
+        console.warn('Error mostrando la notificación personalizada:', err);
     }
 
 }
@@ -403,4 +422,60 @@ btnActivadas.on( 'click', function() {
     cancelarSuscripcion();
 
 
+});
+
+
+// public/js/app.js
+// Función auxiliar para convertir la clave VAPID Base64 a Uint8Array (Requerido por Chrome)
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+// Proceso de suscripción optimizado para Google Chrome
+btnDesactivadas.on('click', async function() {
+  try {
+    if (!swReg) {
+      console.error('No se encontró una registración activa del Service Worker');
+      return;
+    }
+
+    const permitido = await solicitarPermisoNotificaciones();
+    actualizarIndicadorPermiso();
+
+    if (!permitido) return;
+
+    // Obtención de clave pública VAPID desde el backend
+    const response = await fetch('/api/key');
+    const keyBase64 = await response.text();
+    
+    // Conversión a Uint8Array para evitar el error DOMException en Chrome
+    const convertedKey = urlBase64ToUint8Array(keyBase64);
+
+    const subscription = await swReg.pushManager.subscribe({
+      userVisibleOnly: true, // Obligatorio en Chrome
+      applicationServerKey: convertedKey
+    });
+
+    // Envío de la suscripción al servidor Express
+    await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription)
+    });
+
+    verificaSuscripcion(subscription);
+  } catch (err) {
+    console.error('Error durante el proceso de suscripción en Chrome:', err);
+  }
 });
